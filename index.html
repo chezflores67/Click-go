@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>OrderFlow · Food Truck</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#FAF8F5;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+#root{min-height:100vh}
+input[type=checkbox]{accent-color:#FF5733;width:15px;height:15px;cursor:pointer;flex-shrink:0}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#FF7A5C;border-radius:4px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes tickIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes newCard{from{opacity:0;transform:scale(.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+@keyframes float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-14px) rotate(2deg)}}
+@keyframes blobMove{0%,100%{transform:scale(1) translate(0,0)}33%{transform:scale(1.08) translate(22px,-16px)}66%{transform:scale(.96) translate(-12px,20px)}}
+@keyframes slideD{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pr:active{transform:scale(.96)!important}
+</style>
+</head>
+<body><div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef,useCallback}=React;
+
+/* STORAGE */
+const LS={get:(k)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+let BC=null;try{BC=new BroadcastChannel("oft_ch")}catch{}
+const K={orders:"oft_orders",counter:"oft_counter",biz:"oft_biz",prods:"oft_prods",pin:"oft_pin"};
+const dkey=()=>"oft_ds_"+new Date().toDateString();
+const wkey=()=>{const d=new Date(),s=new Date(d);s.setDate(d.getDate()-d.getDay());return"oft_ws_"+s.toDateString()};
+const DEFAULT_PIN="1234",MAX_PRODS=29,APP_NAME="OrderFlow",BIZ_NAME="BURGER TRUCK";
+const CATS=[{k:"hamburguesas",l:"Hamburguesas",i:"🍔"},{k:"bebidas",l:"Bebidas",i:"🥤"},{k:"extras",l:"Extras",i:"🍟"},{k:"combos",l:"Combos",i:"🎯"}];
+const DEFAULT_PRODS={hamburguesas:[{id:"h1",name:"La Clásica",price:89,emoji:"🍔",desc:"El original.",ing:["Carne 100% res","Pan brioche","Lechuga","Tomate","Cebolla","Pepinillos","Ketchup","Mostaza"],on:true},{id:"h2",name:"Doble Poder",price:119,emoji:"🍔",desc:"Doble carne.",ing:["Doble carne res","Pan brioche","Lechuga","Tomate","Queso americano","Ketchup"],on:true},{id:"h3",name:"BBQ Bacon",price:129,emoji:"🥓",desc:"Ahumada con tocino.",ing:["Carne res","Pan brioche","Tocino","Queso cheddar","Cebolla caramelizada","Salsa BBQ"],on:true},{id:"h4",name:"La Hawaiana",price:109,emoji:"🍍",desc:"Dulce y tropical.",ing:["Carne res","Pan esponja","Piña asada","Queso americano","Jamón","Mayonesa"],on:true},{id:"h5",name:"La Picante 🔥",price:109,emoji:"🌶️",desc:"Solo para valientes.",ing:["Carne res","Jalapeños frescos","Queso pepper jack","Cebolla morada","Salsa habanero"],on:true},{id:"h6",name:"Smash Burger",price:139,emoji:"💥",desc:"Aplastada. Crocante.",ing:["Doble smash res","Pan tostado","Queso fundido","Cebolla confitada","Pepinillos","Salsa especial"],on:true},{id:"h7",name:"Mushroom Swiss",price:119,emoji:"🍄",desc:"Champiñones y queso suizo.",ing:["Carne res","Pan brioche","Champiñones","Queso suizo","Mostaza Dijon"],on:true},{id:"h8",name:"Cheese Tower 👑",price:149,emoji:"👑",desc:"La reina del camión.",ing:["Doble carne","Triple queso","Pan brioche premium","Tocino extra","Lechuga","Tomate"],on:true}],bebidas:[{id:"b1",name:"Agua Fresca",price:30,emoji:"🥤",desc:"Jamaica, horchata o tamarindo.",ing:[],on:true},{id:"b2",name:"Refresco Lata",price:25,emoji:"🥤",desc:"355 ml bien fría.",ing:[],on:true},{id:"b3",name:"Agua Natural",price:20,emoji:"💧",desc:"Botella 600 ml.",ing:[],on:true},{id:"b4",name:"Malteada",price:65,emoji:"🥛",desc:"Vainilla, chocolate o fresa.",ing:[],on:true},{id:"b5",name:"Cerveza Preparada",price:50,emoji:"🍺",desc:"Con clamato, limón y sal.",ing:[],on:true}],extras:[{id:"e1",name:"Papas Fritas",price:45,emoji:"🍟",desc:"Con sal de mar.",ing:[],on:true},{id:"e2",name:"Aros de Cebolla",price:50,emoji:"🧅",desc:"Crujientes y dorados.",ing:[],on:true},{id:"e3",name:"Nuggets × 6",price:55,emoji:"🍗",desc:"Con salsa BBQ.",ing:[],on:true},{id:"e4",name:"Queso Extra",price:15,emoji:"🧀",desc:"Rebanada americana.",ing:[],on:true},{id:"e5",name:"Tocino Extra",price:20,emoji:"🥓",desc:"2 tiras crujientes.",ing:[],on:true}],combos:[{id:"c1",name:"Combo Clásico",price:129,emoji:"🎯",desc:"Clásica + Papas + Refresco.",ing:[],on:true},{id:"c2",name:"Combo Doble",price:169,emoji:"🔥",desc:"Doble Poder + Papas + Refresco.",ing:[],on:true},{id:"c3",name:"Combo Smash",price:189,emoji:"💥",desc:"Smash + Papas + Malteada.",ing:[],on:true},{id:"c4",name:"Combo Familiar",price:399,emoji:"👨‍👩‍👧",desc:"4 Clásicas + 4 Refrescos + 2 Papas.",ing:[],on:true},{id:"c5",name:"Combo Kids",price:99,emoji:"🧒",desc:"Mini burger + Papas + Agua.",ing:[],on:true}]};
+
+const pad=(n)=>String(n).padStart(3,"0");
+const elapsed=(ts)=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?s+"s":Math.floor(s/60)+"m "+(s%60)+"s"};
+const urgColor=(ts)=>{const m=(Date.now()-ts)/60000;return m>10?"#ef4444":m>5?"#f59e0b":"#22c55e"};
+const cartTotal=(cart,prods)=>Object.entries(cart).reduce((sum,[id,d])=>{for(const arr of Object.values(prods)){const p=arr.find(x=>x.id===id);if(p)return sum+p.price*d.qty}return sum},0);
+const cartCount=(cart)=>Object.values(cart).reduce((s,d)=>s+d.qty,0);
+function nextOrderNum(){const n=LS.get(K.counter)||0;const next=n>=999?1:n+1;LS.set(K.counter,next);return next;}
+function logSale(order){const d=LS.get(dkey())||{rev:0,cnt:0,items:{}};d.rev+=order.total;d.cnt++;order.items.forEach(it=>{d.items[it.name]=(d.items[it.name]||0)+it.qty});LS.set(dkey(),d);const w=LS.get(wkey())||{rev:0,cnt:0,days:{}};w.rev+=order.total;w.cnt++;const day=new Date().toLocaleDateString("es-MX",{weekday:"short"});w.days[day]=(w.days[day]||0)+order.total;LS.set(wkey(),w);}
+function exportCSV(){const d=LS.get(dkey())||{rev:0,cnt:0,items:{}};const w=LS.get(wkey())||{rev:0,cnt:0,days:{}};const lines=["RESUMEN — OrderFlow","Generado:,"+new Date().toLocaleString("es-MX"),"","== HOY ==","Órdenes,"+d.cnt,"Recaudado,$"+d.rev,"Ticket prom.,$"+(d.cnt>0?Math.round(d.rev/d.cnt):0),"","== TOP PRODUCTOS ==","Producto,Cantidad",...Object.entries(d.items).sort((a,b)=>b[1]-a[1]).map(([n,q])=>n+","+q),"","== SEMANA ==","Día,Venta",...Object.entries(w.days).map(([dy,v])=>dy+",$"+v),"","Total semana,$"+w.rev,"Órdenes semana,"+w.cnt];const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="resumen_semanal.csv";a.click();URL.revokeObjectURL(url);}
+function playAlert(){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();[[523,.0],[659,.13],[784,.26],[1047,.39],[1319,.52]].forEach(([f,t])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=f;o.type="sine";const s=ctx.currentTime+t;g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(.26,s+.05);g.gain.exponentialRampToValueAtTime(.001,s+.3);o.start(s);o.stop(s+.31)});}catch{}}
+
+const T={bg:"#FAF8F5",bgWarm:"#F5F0EA",white:"#FFFFFF",glass:"rgba(255,255,255,0.72)",glassBrd:"rgba(255,255,255,0.9)",accent:"#FF5733",accentL:"#FF7A5C",accentXL:"#FFF0EC",lime:"#BFFF6E",limeD:"#8CD43A",yellow:"#FFD166",yellowD:"#E6A800",ink:"#1A1A2E",inkMid:"#4A4A6A",inkLight:"#9090B0",inkFaint:"#C8C8E0",border:"rgba(26,26,46,0.08)",shadow:"0 2px 20px rgba(255,87,51,.08),0 1px 4px rgba(26,26,46,.05)",shadowLg:"0 8px 48px rgba(255,87,51,.13),0 2px 12px rgba(26,26,46,.07)",r:18,rLg:26};
+const GS=`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;400;500;600;700;800&display=swap');*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{background:${T.bg};overscroll-behavior:none;-webkit-tap-highlight-color:transparent}input[type=checkbox]{accent-color:${T.accent};width:15px;height:15px;cursor:pointer;flex-shrink:0}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}::-webkit-scrollbar{width:3px;height:3px}::-webkit-scrollbar-thumb{background:${T.accentL};border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes tickIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}@keyframes newCard{from{opacity:0;transform:scale(.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}@keyframes float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-14px) rotate(2deg)}}@keyframes blobMove{0%,100%{transform:scale(1) translate(0,0)}33%{transform:scale(1.08) translate(22px,-16px)}66%{transform:scale(.96) translate(-12px,20px)}}@keyframes slideD{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@keyframes spin{to{transform:rotate(360deg)}}.pr:active{transform:scale(.96)!important}`;
+const Btn=({children,onClick,bg=T.accent,fg="#fff",style={},...r})=><button onClick={onClick} className="pr" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:700,borderRadius:50,background:bg,color:fg,padding:"13px 24px",fontSize:14,transition:"all .18s",...style}} {...r}>{children}</button>;
+const Toast=({msg})=>msg?<div style={{background:msg.includes("✅")?T.lime:msg.includes("⚠️")?T.yellow:"#FFD5CE",color:T.ink,borderRadius:12,padding:"11px 16px",marginBottom:16,fontSize:13,fontWeight:600,animation:"slideD .25s ease",border:`1px solid ${msg.includes("✅")?T.limeD:msg.includes("⚠️")?T.yellowD:T.accent}`,display:"flex",alignItems:"center",gap:8}}>{msg}</div>:null;
+const Card=({children,style={}})=><div style={{background:T.white,borderRadius:T.r,padding:20,marginBottom:16,border:`1px solid ${T.border}`,boxShadow:T.shadow,...style}}>{children}</div>;
+
+function KCard({order,onDone}){
+  const [,tick]=useState(0);
+  useEffect(()=>{const iv=setInterval(()=>tick(t=>t+1),1000);return()=>clearInterval(iv);},[]);
+  const c=urgColor(order.timestamp);
+  return(
+    <div style={{background:T.white,borderRadius:T.rLg,border:`2px solid ${c}30`,overflow:"hidden",animation:"newCard .32s ease",boxShadow:`0 4px 24px rgba(26,26,46,.08)`}}>
+      <div style={{background:`linear-gradient(135deg,${c}12,transparent)`,padding:"14px 16px",borderBottom:`1px solid ${c}14`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontFamily:"'Instrument Serif',serif",fontSize:70,color:T.ink,lineHeight:.82}}>{pad(order.orderNum)}</div>
+            <div style={{color:T.inkMid,fontWeight:700,fontSize:14,marginTop:6}}>👤 {order.customerName}</div>
+            {order.type&&<div style={{color:T.inkLight,fontSize:12,marginTop:2}}>{order.type==="aqui"?"🪑 Comer aquí":"🛍️ Para llevar"}</div>}
+          </div>
+          <div style={{textAlign:"right"}}>
+            <span style={{color:c,fontWeight:800,fontSize:13,background:c+"18",borderRadius:20,padding:"3px 10px"}}>⏱ {elapsed(order.timestamp)}</span>
+            <div style={{color:T.accent,fontWeight:800,fontFamily:"'Instrument Serif',serif",fontSize:24,marginTop:8}}>${order.total}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:"12px 14px"}}>
+        {order.items.map((item,i)=>(
+          <div key={i} style={{marginBottom:9,paddingBottom:9,borderBottom:i<order.items.length-1?`1px solid ${T.border}`:"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:14,color:T.ink}}>
+              <span>{item.emoji} {item.qty}× {item.name}</span>
+              <span style={{color:T.inkLight,fontWeight:500,fontSize:12}}>${item.price*item.qty}</span>
+            </div>
+            {item.removed?.length>0&&<div style={{color:"#ef4444",fontSize:11,marginTop:4,background:"#FFF0F0",borderRadius:7,padding:"3px 9px",border:"1px solid #FFD5D5"}}>❌ SIN: {item.removed.join(" · ")}</div>}
+            {item.note&&<div style={{color:"#92710A",fontSize:11,marginTop:3,background:"#FFFAE5",borderRadius:7,padding:"3px 9px",border:"1px solid #FFE9A0"}}>📝 {item.note}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"0 14px 14px"}}>
+        <Btn onClick={()=>onDone(order.id)} bg={T.lime} fg={T.ink} style={{width:"100%",padding:"14px",fontSize:15,borderRadius:14,fontWeight:800,boxShadow:`0 4px 16px rgba(191,255,110,.5)`}}>✅ Lista — Entregar</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ADMIN LOGIN ═══════════════════════════ */
+function AdminLogin({onOk,onBack}){
+  const [pin,setPin]=useState(""),[shake,setShake]=useState(false),[err,setErr]=useState("");
+  const press=k=>{
+    if(k==="⌫"){setPin(p=>p.slice(0,-1));setErr("");return;}
+    if(pin.length>=4)return;
+    const np=pin+k;setPin(np);
+    if(np.length===4){
+      const stored=LS.get(K.pin)||DEFAULT_PIN;
+      if(np===stored){onOk();return;}
+      setShake(true);setErr("PIN incorrecto");setPin("");
+      setTimeout(()=>{setShake(false);setErr("");},1400);
+    }
+  };
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:T.bg}}>
+      <div style={{background:T.white,borderRadius:T.rLg,padding:32,maxWidth:290,width:"100%",boxShadow:T.shadowLg,border:`1px solid ${T.border}`,textAlign:"center",animation:"fadeUp .4s ease"}}>
+        <div style={{width:60,height:60,borderRadius:16,background:T.accentXL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 16px"}}>🔐</div>
+        <h2 style={{fontFamily:"'Instrument Serif',serif",fontSize:28,color:T.ink,marginBottom:4}}>Administración</h2>
+        <p style={{color:T.inkLight,fontSize:13,marginBottom:24}}>PIN de 4 dígitos</p>
+        <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:err?12:20,animation:shake?"shake .4s ease":"none"}}>
+          {[0,1,2,3].map(i=><div key={i} style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${pin.length>i?T.accent:T.inkFaint}`,background:pin.length>i?T.accent:"transparent",transition:"all .15s"}}/>)}
+        </div>
+        {err&&<p style={{color:"#ef4444",fontSize:13,marginBottom:14,fontWeight:600,animation:"slideD .2s ease"}}>{err}</p>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+          {["1","2","3","4","5","6","7","8","9","⌫","0","✓"].map(k=>(
+            <button key={k} onClick={()=>press(k)} className="pr" style={{padding:"17px 10px",borderRadius:12,background:k==="✓"?T.accent:T.bgWarm,border:`1px solid ${k==="✓"?T.accent:T.border}`,color:k==="✓"?"#fff":T.ink,fontSize:k==="⌫"?16:20,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>{k}</button>
+          ))}
+        </div>
+        <Btn onClick={onBack} bg={T.bgWarm} fg={T.inkMid} style={{width:"100%",padding:"12px",fontSize:14,border:`1px solid ${T.border}`}}>← Volver</Btn>
+        <p style={{color:T.inkFaint,fontSize:10,marginTop:12}}>PIN por defecto: {DEFAULT_PIN}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ADMIN PANEL ═══════════════════════════ */
+function Admin({biz,prods,onBiz,onProds,onOut}){
+  const [tab,setTab]=useState("stats");
+  const TABS=[{k:"stats",l:"Estadísticas",i:"📊"},{k:"prods",l:"Productos",i:"🛍️"},{k:"orders",l:"Órdenes",i:"🔢"},{k:"biz",l:"Negocio",i:"🏪"}];
+  return(
+    <div style={{minHeight:"100vh",background:T.bgWarm}}>
+      <div style={{background:T.white,borderBottom:`1px solid ${T.border}`,padding:"12px 20px",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 12px rgba(26,26,46,.05)"}}>
+        <div style={{maxWidth:900,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div>
+            <h1 style={{fontFamily:"'Instrument Serif',serif",fontSize:24,color:T.ink,lineHeight:1}}>⚙️ Administración</h1>
+            <p style={{color:T.inkLight,fontSize:11,marginTop:2}}>{biz.name}</p>
+          </div>
+          <Btn onClick={onOut} bg={T.bgWarm} fg={T.inkMid} style={{padding:"9px 16px",fontSize:13,border:`1px solid ${T.border}`}}>Salir ✕</Btn>
+        </div>
+        <div style={{maxWidth:900,margin:"10px auto 0",display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none"}}>
+          {TABS.map(t=>(
+            <button key={t.k} onClick={()=>setTab(t.k)} className="pr" style={{flexShrink:0,padding:"8px 16px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",transition:"all .2s",background:tab===t.k?T.accent:T.bgWarm,color:tab===t.k?"#fff":T.inkMid,borderRadius:50,fontFamily:"'DM Sans',sans-serif",boxShadow:tab===t.k?`0 4px 14px rgba(255,87,51,.3)`:"none"}}>
+              {t.i} {t.l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"22px 16px"}}>
+        {tab==="stats" &&<StatsTab/>}
+        {tab==="prods" &&<ProdsTab prods={prods} onSave={onProds}/>}
+        {tab==="orders"&&<OrdersTab biz={biz} onBiz={onBiz}/>}
+        {tab==="biz"   &&<BizTab biz={biz} onSave={onBiz}/>}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ STATS TAB ═══════════════════════════ */
+function StatsTab(){
+  const [ds,setDs]=useState(null),[ws,setWs]=useState(null);
+  useEffect(()=>{setDs(LS.get(dkey())||{rev:0,cnt:0,items:{}});setWs(LS.get(wkey())||{rev:0,cnt:0,days:{}});},[]);
+  if(!ds||!ws)return <p style={{color:T.inkLight,padding:40,textAlign:"center"}}>Cargando…</p>;
+  const avg=ds.cnt>0?Math.round(ds.rev/ds.cnt):0;
+  const top=Object.entries(ds.items).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const days=Object.entries(ws.days);
+  const maxD=Math.max(...days.map(([,v])=>v),1);
+  return(
+    <div style={{animation:"fadeIn .3s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink}}>Hoy — {new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})}</h3>
+        <Btn onClick={exportCSV} bg={T.lime} fg={T.ink} style={{padding:"9px 18px",fontSize:13,fontWeight:800}}>📥 Exportar CSV</Btn>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:18}}>
+        {[{l:"Órdenes hoy",v:ds.cnt,c:"#3B82F6"},{l:"Recaudado",v:"$"+ds.rev,c:"#22c55e"},{l:"Ticket prom.",v:"$"+avg,c:T.accent}].map(s=>(
+          <Card key={s.l} style={{padding:"18px 20px",marginBottom:0}}>
+            <p style={{color:T.inkLight,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>{s.l}</p>
+            <p style={{color:s.c,fontFamily:"'Instrument Serif',serif",fontSize:36,lineHeight:1.1,marginTop:6}}>{s.v}</p>
+          </Card>
+        ))}
+      </div>
+      {top.length>0&&(
+        <Card>
+          <h4 style={{fontFamily:"'Instrument Serif',serif",fontSize:19,color:T.ink,marginBottom:12}}>🏆 Top productos hoy</h4>
+          {top.map(([nm,qty],i)=>(
+            <div key={nm} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<top.length-1?8:0,padding:"9px 13px",background:T.bgWarm,borderRadius:10}}>
+              <span style={{color:T.inkMid,fontSize:13,fontWeight:600}}>#{i+1} {nm}</span>
+              <span style={{background:T.accentXL,color:T.accent,borderRadius:20,padding:"3px 12px",fontSize:13,fontWeight:800}}>{qty} uds</span>
+            </div>
+          ))}
+        </Card>
+      )}
+      <Card style={{marginBottom:0}}>
+        <h4 style={{fontFamily:"'Instrument Serif',serif",fontSize:19,color:T.ink,marginBottom:4}}>📅 Esta semana</h4>
+        <p style={{color:T.inkLight,fontSize:12,marginBottom:18}}>Total: <strong style={{color:"#22c55e"}}>${ws.rev}</strong> · {ws.cnt} órdenes · prom/día: <strong style={{color:T.accent}}>${days.length>0?Math.round(ws.rev/days.length):0}</strong></p>
+        {days.length===0
+          ?<p style={{color:T.inkFaint,fontSize:13,textAlign:"center",padding:"22px 0"}}>Sin ventas esta semana aún</p>
+          :<div style={{display:"flex",gap:8,alignItems:"flex-end",height:110}}>
+            {days.map(([day,val])=>(
+              <div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                <span style={{color:"#22c55e",fontSize:10,fontWeight:800}}>${val}</span>
+                <div style={{width:"100%",background:`linear-gradient(to top,${T.accent},${T.yellow})`,borderRadius:"5px 5px 0 0",height:Math.max(Math.round((val/maxD)*78),4),transition:"height .6s ease",boxShadow:`0 4px 12px rgba(255,87,51,.25)`}}/>
+                <span style={{color:T.inkLight,fontSize:10,fontWeight:600}}>{day}</span>
+              </div>
+            ))}
+          </div>
+        }
+      </Card>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ PRODUCTS TAB ═══════════════════════════ */
+function ProdsTab({prods,onSave}){
+  const [cat,setCat]=useState("hamburguesas"),[editing,setEditing]=useState(null),[form,setForm]=useState({}),[msg,setMsg]=useState("");
+  const total=CATS.reduce((s,c)=>s+(prods[c.k]||[]).length,0),catP=prods[cat]||[];
+  const sm=t=>{setMsg(t);setTimeout(()=>setMsg(""),2600);};
+  const openNew=()=>{if(total>=MAX_PRODS){sm("⚠️ Límite de "+MAX_PRODS+" productos");return;}setForm({name:"",price:"",emoji:"🍔",desc:"",ing:"",on:true});setEditing("new");};
+  const openEdit=p=>{setForm({...p,ing:(p.ing||[]).join(", ")});setEditing(p.id);};
+  const del=id=>{onSave({...prods,[cat]:catP.filter(p=>p.id!==id)});sm("Producto eliminado");};
+  const toggle=id=>onSave({...prods,[cat]:catP.map(p=>p.id===id?{...p,on:!p.on}:p)});
+  const save=()=>{
+    if(!form.name?.trim()||!form.price){sm("⚠️ Nombre y precio requeridos");return;}
+    const item={id:editing==="new"?(cat[0]+Date.now()):editing,name:form.name.trim(),price:+form.price,emoji:form.emoji||"🍔",desc:form.desc||"",ing:form.ing?form.ing.split(",").map(s=>s.trim()).filter(Boolean):[],on:form.on!==false};
+    onSave(editing==="new"?{...prods,[cat]:[...catP,item]}:{...prods,[cat]:catP.map(p=>p.id===editing?item:p)});
+    setEditing(null);sm("✅ Guardado");
+  };
+  const IS={width:"100%",padding:"12px 14px",borderRadius:12,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:15,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const LB=({txt})=><label style={{color:T.inkLight,fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:7}}>{txt}</label>;
+  if(editing!==null)return(
+    <div style={{animation:"fadeIn .2s ease"}}>
+      <button onClick={()=>setEditing(null)} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontSize:14,fontWeight:700,marginBottom:18,display:"flex",alignItems:"center",gap:5}}>← Volver</button>
+      <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink,marginBottom:18}}>{editing==="new"?"Nuevo Producto":"Editar Producto"}</h3>
+      <Toast msg={msg}/>
+      <Card>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {[{f:"emoji",l:"Emoji"},{f:"name",l:"Nombre *"},{f:"desc",l:"Descripción"},{f:"ing",l:"Ingredientes (separados por coma)"}].map(field=>(
+            <div key={field.f}><LB txt={field.l}/><input type="text" value={form[field.f]||""} onChange={e=>setForm(p=>({...p,[field.f]:e.target.value}))} style={IS}/></div>
+          ))}
+          <div><LB txt="Precio * ($)"/><input type="number" value={form.price||""} min="1" onChange={e=>setForm(p=>({...p,price:e.target.value}))} style={IS}/></div>
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={form.on!==false} onChange={e=>setForm(p=>({...p,on:e.target.checked}))} style={{width:18,height:18}}/>
+            <span style={{color:T.inkMid,fontSize:14,fontWeight:600}}>Activo (visible en menú)</span>
+          </label>
+          <Btn onClick={save} style={{padding:"14px",fontSize:15,borderRadius:14}}>Guardar Producto</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+  return(
+    <div style={{animation:"fadeIn .2s ease"}}>
+      <Toast msg={msg}/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <div><h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink}}>Catálogo de Productos</h3><p style={{color:T.inkLight,fontSize:13,marginTop:2}}>{total}/{MAX_PRODS} registrados</p></div>
+        <Btn onClick={openNew} style={{padding:"9px 20px",fontSize:13,boxShadow:`0 4px 16px rgba(255,87,51,.3)`}}>+ Agregar</Btn>
+      </div>
+      <div style={{display:"flex",gap:7,marginBottom:14,overflowX:"auto",scrollbarWidth:"none"}}>
+        {CATS.map(c=><button key={c.k} onClick={()=>setCat(c.k)} className="pr" style={{flexShrink:0,padding:"7px 15px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",transition:"all .2s",background:cat===c.k?T.accent:T.white,color:cat===c.k?"#fff":T.inkMid,borderRadius:50,fontFamily:"'DM Sans',sans-serif",boxShadow:cat===c.k?`0 4px 12px rgba(255,87,51,.3)`:`0 2px 6px rgba(26,26,46,.06)`}}>{c.i} {c.l} ({(prods[c.k]||[]).length})</button>)}
+      </div>
+      {catP.length===0
+        ?<div style={{textAlign:"center",padding:50,color:T.inkFaint,border:`2px dashed ${T.border}`,borderRadius:T.r}}><p style={{fontSize:30,marginBottom:10,opacity:.3}}>🍽️</p><p style={{fontSize:14}}>Sin productos en esta categoría</p><Btn onClick={openNew} style={{marginTop:14,padding:"9px 20px",fontSize:13}}>+ Agregar</Btn></div>
+        :catP.map(p=>(
+          <div key={p.id} style={{background:T.white,borderRadius:T.r,padding:"12px 14px",marginBottom:8,border:`1px solid ${T.border}`,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:12,opacity:p.on?1:.45,transition:"opacity .25s"}}>
+            <div style={{fontSize:28,flexShrink:0}}>{p.emoji}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:14,color:T.ink}}>{p.name}</div>
+              <div style={{color:T.accent,fontFamily:"'Instrument Serif',serif",fontSize:18}}>${p.price}</div>
+            </div>
+            <div style={{display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
+              <button onClick={()=>toggle(p.id)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${p.on?"#22c55e":T.border}`,color:p.on?"#22c55e":T.inkLight,background:"none",fontSize:11,fontWeight:800,cursor:"pointer",transition:"all .2s"}}>{p.on?"ON":"OFF"}</button>
+              <button onClick={()=>openEdit(p)} style={{background:T.bgWarm,border:`1px solid ${T.border}`,color:T.inkMid,padding:"7px 10px",borderRadius:10,cursor:"pointer",fontSize:13}}>✏️</button>
+              <button onClick={()=>del(p.id)} style={{background:"#FFF0F0",border:"1px solid #FFD5D5",color:"#ef4444",padding:"7px 10px",borderRadius:10,cursor:"pointer",fontSize:13}}>🗑️</button>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ORDERS TAB ═══════════════════════════ */
+function OrdersTab({biz,onBiz}){
+  const [counter,setCounter]=useState(LS.get(K.counter)||0),[newNum,setNewNum]=useState(""),[prep,setPrep]=useState(biz.prep||15),[msg,setMsg]=useState("");
+  const sm=t=>{setMsg(t);setTimeout(()=>setMsg(""),2600);};
+  const doReset=()=>{LS.set(K.counter,0);setCounter(0);sm("✅ Reiniciado. Próxima orden: #001");};
+  const doSet=()=>{const n=parseInt(newNum);if(isNaN(n)||n<0||n>999){sm("⚠️ Número inválido (0–999)");return;}LS.set(K.counter,n);setCounter(n);setNewNum("");sm("✅ Contador → "+String(n).padStart(3,"0"));};
+  const savePrep=v=>{const n=parseInt(v||prep);if(isNaN(n)||n<1||n>120){sm("⚠️ Tiempo inválido (1–120)");return;}onBiz({...biz,prep:n});setPrep(n);sm("✅ Tiempo: "+n+" min");};
+  const IS={flex:1,padding:"11px 13px",borderRadius:12,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  return(
+    <div style={{animation:"fadeIn .3s ease"}}>
+      <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink,marginBottom:16}}>Gestión de Órdenes</h3>
+      <Toast msg={msg}/>
+      <Card>
+        <p style={{color:T.inkLight,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:10}}>Contador actual</p>
+        <div style={{fontFamily:"'Instrument Serif',serif",fontSize:96,color:T.accent,lineHeight:.85,marginBottom:14}}>{String(counter).padStart(3,"0")}</div>
+        <p style={{color:T.inkLight,fontSize:13,marginBottom:18,lineHeight:1.7}}>Del <strong style={{color:T.ink}}>#001</strong> al <strong style={{color:T.ink}}>#999</strong>, reinicio automático al llegar a 999.</p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <button onClick={doReset} style={{padding:"10px 18px",borderRadius:20,background:"#FFF0F0",border:"1.5px solid #FFD5D5",color:"#ef4444",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>↺ Reiniciar a #001</button>
+          <div style={{display:"flex",gap:8,flex:1,minWidth:180}}>
+            <input type="number" value={newNum} placeholder="Establecer en…" min="0" max="999" onChange={e=>setNewNum(e.target.value)} style={IS}/>
+            <Btn onClick={doSet} style={{padding:"11px 18px",fontSize:13,flexShrink:0}}>Aplicar</Btn>
+          </div>
+        </div>
+      </Card>
+      <Card style={{marginBottom:0}}>
+        <p style={{color:T.inkLight,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:10}}>Tiempo de preparación</p>
+        <div style={{fontFamily:"'Instrument Serif',serif",fontSize:60,color:"#3B82F6",lineHeight:.9,marginBottom:14}}>{prep} MIN</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,flex:1,minWidth:160}}>
+            <input type="number" value={prep} min="1" max="120" onChange={e=>setPrep(e.target.value)} style={IS}/>
+            <Btn onClick={()=>savePrep(prep)} bg="#3B82F6" style={{padding:"11px 18px",fontSize:13,flexShrink:0}}>Guardar</Btn>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            {[10,15,20,30].map(n=><button key={n} onClick={()=>savePrep(n)} style={{padding:"10px 13px",borderRadius:20,background:prep==n?"#3B82F6":T.bgWarm,border:`1px solid ${prep==n?"#3B82F6":T.border}`,color:prep==n?"#fff":T.inkMid,fontWeight:700,fontSize:12,cursor:"pointer",transition:"all .2s",fontFamily:"'DM Sans',sans-serif"}}>{n}</button>)}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ BIZ TAB ═══════════════════════════ */
+function BizTab({biz,onSave}){
+  const [form,setForm]=useState({...biz}),[pin,setPin]=useState(""),[pin2,setPin2]=useState(""),[msg,setMsg]=useState(""),[pmsg,setPmsg]=useState("");
+  const sm=t=>{setMsg(t);setTimeout(()=>setMsg(""),2600);};
+  const spm=t=>{setPmsg(t);setTimeout(()=>setPmsg(""),3000);};
+  const saveInfo=()=>{onSave({...form});sm("✅ Cambios guardados");};
+  const savePIN=()=>{if(!/^\d{4}$/.test(pin)){spm("⚠️ El PIN debe ser 4 dígitos");return;}if(pin!==pin2){spm("⚠️ Los PINs no coinciden");return;}LS.set(K.pin,pin);setPin("");setPin2("");spm("✅ PIN actualizado");};
+  const handleLogo=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>setForm(p=>({...p,logo:ev.target.result}));r.readAsDataURL(file);};
+  const IS={width:"100%",padding:"12px 14px",borderRadius:12,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:15,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const LB=({txt})=><label style={{color:T.inkLight,fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:7}}>{txt}</label>;
+  return(
+    <div style={{animation:"fadeIn .3s ease"}}>
+      <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink,marginBottom:16}}>Configuración del Negocio</h3>
+      <Toast msg={msg}/>
+      <Card>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div><LB txt="Nombre de la App"/><input type="text" value={form.appName||""} placeholder={APP_NAME} onChange={e=>setForm(p=>({...p,appName:e.target.value}))} style={IS}/></div>
+          <div><LB txt="Nombre del Negocio"/><input type="text" value={form.name||""} placeholder={BIZ_NAME} onChange={e=>setForm(p=>({...p,name:e.target.value}))} style={IS}/></div>
+          <div>
+            <LB txt="Logo del Negocio"/>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              {form.logo?<img src={form.logo} alt="logo" style={{width:66,height:66,borderRadius:14,objectFit:"cover",border:`2px solid ${T.border}`,boxShadow:T.shadow}}/>:<div style={{width:66,height:66,borderRadius:14,background:T.bgWarm,border:`2px dashed ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,opacity:.4}}>🍔</div>}
+              <div>
+                <label htmlFor="logo-file" style={{display:"inline-block",padding:"9px 18px",borderRadius:20,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.inkMid,cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:T.shadow}}>📁 Subir imagen</label>
+                <input id="logo-file" type="file" accept="image/*" onChange={handleLogo} style={{display:"none"}}/>
+                {form.logo&&<button onClick={()=>setForm(p=>({...p,logo:null}))} style={{marginLeft:10,background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:13,fontWeight:700}}>Quitar</button>}
+              </div>
+            </div>
+          </div>
+          <Btn onClick={saveInfo} style={{padding:"14px",fontSize:15,borderRadius:14}}>Guardar Cambios</Btn>
+        </div>
+      </Card>
+      <Card style={{marginBottom:0}}>
+        <h4 style={{fontFamily:"'Instrument Serif',serif",fontSize:19,color:T.ink,marginBottom:14}}>🔐 Cambiar PIN</h4>
+        <Toast msg={pmsg}/>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <input type="password" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="Nuevo PIN (4 dígitos)" style={{...IS,letterSpacing:10,fontSize:24}}/>
+          <input type="password" value={pin2} onChange={e=>setPin2(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="Confirmar PIN" style={{...IS,letterSpacing:10,fontSize:24}}/>
+          <Btn onClick={savePIN} bg={T.bgWarm} fg={T.inkMid} style={{padding:"13px",fontSize:14,border:`1px solid ${T.border}`}}>Cambiar PIN</Btn>
+        </div>
+        <p style={{color:T.inkFaint,fontSize:10,marginTop:12}}>PIN por defecto: {DEFAULT_PIN}</p>
+      </Card>
+    </div>
+  );
+}
+
+function App(){
+  /* ── Detección de modo por URL ──────────────────────────────
+     Cliente  →  index.html            (sin parámetros)
+     Cocina   →  index.html?modo=cocina
+     Admin    →  index.html?modo=admin
+  ──────────────────────────────────────────────────────────── */
+  const urlMode = new URLSearchParams(window.location.search).get("modo") || "";
+  const initView = urlMode === "cocina" ? "kitchen" : urlMode === "admin" ? "adminlogin" : "welcome";
+
+  const [view,setView]=useState(initView),[fromV,setFromV]=useState(initView),[cname,setCname]=useState(""),[lastOrd,setLastOrd]=useState(null),[biz,setBiz]=useState(null),[prods,setProds]=useState(null);
+  useEffect(()=>{setBiz(LS.get(K.biz)||{appName:APP_NAME,name:BIZ_NAME,logo:null,prep:15});setProds(LS.get(K.prods)||DEFAULT_PRODS);const iv=setInterval(()=>{const b=LS.get(K.biz);if(b)setBiz(b);const p=LS.get(K.prods);if(p)setProds(p);},12000);return()=>clearInterval(iv);},[]);
+  if(!biz||!prods)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg}}><span style={{fontFamily:"'DM Sans',sans-serif",color:T.accent,fontSize:18,animation:"spin 1s linear infinite",display:"inline-block"}}>◌</span></div>;
+  const go=(v,prev)=>{if(prev!==undefined)setFromV(prev);setView(v);};
+  const saveBiz=(b)=>{setBiz(b);LS.set(K.biz,b);};
+  const saveProds=(p)=>{setProds(p);LS.set(K.prods,p);};
+  return(<><style>{GS}</style><div style={{minHeight:"100vh",background:T.bg,color:T.ink,fontFamily:"'DM Sans',sans-serif"}}>
+    {view==="welcome"   &&<Welcome    biz={biz} onStart={n=>{setCname(n);go("menu");}}/>}
+    {view==="menu"      &&<Menu       biz={biz} prods={prods} name={cname} onBack={()=>go("welcome")} onOrder={od=>{setLastOrd(od);go("confirm");}}/>}
+    {view==="confirm"   &&<Confirm    name={cname} order={lastOrd} biz={biz} onNew={()=>{setCname("");go("welcome");}}/>}
+    {view==="kitchen"   &&<Kitchen    biz={biz} onAdmin={()=>go("adminlogin","kitchen")}/>}
+    {view==="adminlogin"&&<AdminLogin onOk={()=>go("admin")} onBack={()=>go(fromV)}/>}
+    {view==="admin"     &&<Admin      biz={biz} prods={prods} onBiz={saveBiz} onProds={saveProds} onOut={()=>go("welcome")}/>}
+  </div></>);
+}
+
+function Welcome({biz,onStart}){
+  const [name,setName]=useState(""),[shake,setShake]=useState(false);
+  const go=()=>{if(!name.trim()){setShake(true);setTimeout(()=>setShake(false),500);return;}onStart(name.trim());};
+  return(
+    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px"}}>
+      {[{c:"rgba(255,87,51,.12)",s:520,top:-180,left:-160,dur:"8s"},{c:"rgba(191,255,110,.2)",s:400,bottom:-120,right:-100,dur:"11s"},{c:"rgba(255,209,102,.18)",s:350,top:"30%",right:-80,dur:"14s"}].map((b,i)=>(
+        <div key={i} style={{position:"absolute",width:b.s,height:b.s,borderRadius:"50%",background:b.c,top:b.top,left:b.left,right:b.right,bottom:b.bottom,filter:"blur(60px)",animation:`blobMove ${b.dur} ease-in-out infinite`,pointerEvents:"none",zIndex:0}}/>
+      ))}
+      <div style={{maxWidth:400,width:"100%",position:"relative",zIndex:1,animation:"fadeUp .6s ease"}}>
+        <p style={{fontWeight:800,fontSize:10,letterSpacing:6,textTransform:"uppercase",color:T.accent,textAlign:"center",marginBottom:22}}>{biz.appName||APP_NAME}</p>
+        <div style={{background:T.glass,backdropFilter:"blur(28px)",WebkitBackdropFilter:"blur(28px)",borderRadius:T.rLg,border:`1.5px solid ${T.glassBrd}`,boxShadow:T.shadowLg,padding:"32px 28px",textAlign:"center"}}>
+          {biz.logo?<img src={biz.logo} alt="logo" style={{width:88,height:88,borderRadius:20,objectFit:"cover",display:"block",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(255,87,51,.2)"}}/>
+            :<div style={{fontSize:72,lineHeight:1,marginBottom:14,display:"block",animation:"float 5s ease-in-out infinite"}}>🍔</div>}
+          <h1 style={{fontFamily:"'Instrument Serif',serif",fontSize:44,color:T.ink,lineHeight:1.05,marginBottom:4}}>{biz.name}</h1>
+          <p style={{color:T.inkLight,fontSize:11,letterSpacing:3,marginBottom:28,textTransform:"uppercase",fontWeight:500}}>Ordena · Espera · Disfruta</p>
+          <p style={{color:T.inkMid,fontSize:14,marginBottom:12,fontWeight:600}}>¿Cómo te llamas?</p>
+          <input type="text" placeholder="Tu nombre..." value={name} maxLength={25} autoFocus
+            onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}
+            style={{width:"100%",padding:"14px 18px",borderRadius:14,background:T.white,border:`2px solid ${shake?"#ef4444":T.border}`,color:T.ink,fontSize:17,outline:"none",fontFamily:"'DM Sans',sans-serif",fontWeight:500,animation:shake?"shake .4s ease":"none",transition:"border-color .2s",marginBottom:14}}/>
+          <Btn onClick={go} style={{width:"100%",padding:"16px",fontSize:16,borderRadius:14,background:`linear-gradient(135deg,${T.accent},#E03010)`,boxShadow:`0 8px 28px rgba(255,87,51,.35)`}}>Ver Menú →</Btn>
+          <p style={{color:T.inkFaint,fontSize:12,marginTop:14}}>Personaliza cada producto a tu gusto</p>
+        </div>
+        <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:16,flexWrap:"wrap"}}>
+          {["🔥 Lo más pedido","✨ Sin fila","⚡ Pide en segundos"].map(t=>(
+            <span key={t} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:20,padding:"5px 12px",fontSize:11,color:T.inkMid,fontWeight:600,boxShadow:"0 2px 8px rgba(26,26,46,.06)"}}>{t}</span>
+          ))}
+        </div>
+      </div>
+      {/* Acceso por URL secreta — sin botones visibles para el cliente */}
+    </div>
+  );
+}
+
+function Menu({biz,prods,name,onBack,onOrder}){
+  const [cat,setCat]=useState("hamburguesas"),[cart,setCart]=useState({}),[tab,setTab]=useState("menu"),[showType,setShowType]=useState(false),[wide,setWide]=useState(window.innerWidth>=800);
+  useEffect(()=>{const h=()=>setWide(window.innerWidth>=800);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
+  const count=cartCount(cart),total=cartTotal(cart,prods);
+  const updateCart=(id,data)=>setCart(prev=>{const n={...prev};if(!data||data.qty===0)delete n[id];else n[id]=data;return n;});
+  const handleOrderType=type=>{
+    setShowType(false);
+    const num=nextOrderNum();
+    const items=Object.entries(cart).flatMap(([id,d])=>{for(const arr of Object.values(prods)){const p=arr.find(x=>x.id===id);if(p)return[{id:p.id,name:p.name,price:p.price,emoji:p.emoji,qty:d.qty,removed:d.removed||[],note:d.note||""}];}return[];});
+    const order={id:Date.now()+"",orderNum:num,customerName:name,timestamp:Date.now(),items,total,type};
+    LS.set(K.orders,[...(LS.get(K.orders)||[]),order]);
+    try{BC?.postMessage({type:"new_order"});}catch{}
+    logSale(order);onOrder({orderNum:num,total,type});
+  };
+  const catItems=(prods[cat]||[]).filter(p=>p.on);
+  const ticket=<TicketPanel cart={cart} prods={prods} total={total} count={count} name={name} onSubmit={()=>count>0&&setShowType(true)}/>;
+  const HDR=118;
+  return(
+    <div style={{minHeight:"100vh",background:T.bgWarm,display:"flex",flexDirection:"column"}}>
+      <div style={{position:"sticky",top:0,zIndex:30,background:"rgba(245,240,234,.95)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:`1px solid ${T.border}`}}>
+        <div style={{maxWidth:1100,margin:"0 auto",padding:"12px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <div><h2 style={{fontFamily:"'Instrument Serif',serif",fontSize:24,color:T.ink,lineHeight:1}}>{biz.name}</h2><p style={{color:T.inkLight,fontSize:12,marginTop:3}}>Hola, <span style={{color:T.accent,fontWeight:700}}>{name}</span> 👋</p></div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {!wide&&count>0&&<Btn onClick={()=>setTab(t=>t==="menu"?"ticket":"menu")} bg={tab==="ticket"?T.accent:T.white} fg={tab==="ticket"?"#fff":T.ink} style={{padding:"9px 16px",fontSize:12,border:`1px solid ${T.border}`}}>{tab==="menu"?`🧾 Orden (${count})`:"← Menú"}</Btn>}
+              <Btn onClick={onBack} bg={T.white} fg={T.inkMid} style={{padding:"9px 16px",fontSize:13,border:`1px solid ${T.border}`}}>← Atrás</Btn>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:7,marginTop:10,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
+            {CATS.map(c=><button key={c.k} onClick={()=>setCat(c.k)} className="pr" style={{flexShrink:0,padding:"8px 16px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",transition:"all .2s",background:cat===c.k?T.accent:T.white,color:cat===c.k?"#fff":T.inkMid,boxShadow:cat===c.k?`0 4px 14px rgba(255,87,51,.3)`:"0 2px 6px rgba(26,26,46,.06)",borderRadius:50,fontFamily:"'DM Sans',sans-serif"}}>{c.i} {c.l} <span style={{opacity:.55,fontSize:10}}>({(prods[c.k]||[]).filter(p=>p.on).length})</span></button>)}
+          </div>
+        </div>
+      </div>
+      <div style={{flex:1,display:"flex",maxWidth:1100,margin:"0 auto",width:"100%"}}>
+        {(wide||tab==="menu")&&<div style={{flex:1,padding:"16px 14px 150px"}}>{catItems.length===0?<div style={{textAlign:"center",padding:"60px 20px",color:T.inkFaint,fontSize:14}}>Sin productos activos aquí</div>:catItems.map(p=><PCard key={p.id} product={p} cartData={cart[p.id]} onChange={d=>updateCart(p.id,d)}/>)}</div>}
+        {wide&&<div style={{width:310,flexShrink:0,padding:"16px 14px 16px 0",position:"sticky",top:HDR,alignSelf:"flex-start",maxHeight:`calc(100vh - ${HDR}px)`,overflowY:"auto"}}>{ticket}</div>}
+        {!wide&&tab==="ticket"&&<div style={{flex:1,padding:"16px 14px 120px"}}>{ticket}</div>}
+      </div>
+      {!wide&&tab==="menu"&&count>0&&(
+        <div style={{position:"fixed",bottom:0,left:0,right:0,padding:"12px 16px 24px",background:`linear-gradient(to top,${T.bgWarm} 70%,transparent)`,zIndex:20}}>
+          <button onClick={()=>setShowType(true)} className="pr" style={{width:"100%",padding:"16px 22px",borderRadius:16,background:`linear-gradient(135deg,${T.accent},#E03010)`,border:"none",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:`0 8px 28px rgba(255,87,51,.45)`,fontFamily:"'DM Sans',sans-serif"}}>
+            <span style={{background:"rgba(255,255,255,.22)",borderRadius:8,padding:"4px 12px",fontSize:13,fontWeight:700}}>{count} item{count!==1?"s":""}</span>
+            <span style={{fontSize:16,fontWeight:800}}>Hacer Pedido</span>
+            <span style={{fontWeight:800,fontSize:18}}>${total}</span>
+          </button>
+        </div>
+      )}
+      {showType&&<OrderTypeModal onSelect={handleOrderType} onClose={()=>setShowType(false)}/>}
+    </div>
+  );
+}
+
+function PCard({product:p,cartData,onChange}){
+  const [open,setOpen]=useState(false);
+  const qty=cartData?.qty||0,removed=cartData?.removed||[],note=cartData?.note||"",active=qty>0;
+  const setQty=delta=>{const n=Math.max(0,qty+delta);if(n===0){onChange(null);setOpen(false);return;}onChange({qty:n,removed,note});if(n===1&&qty===0&&p.ing.length>0)setOpen(true);};
+  const toggleIng=ing=>{const r=removed.includes(ing)?removed.filter(x=>x!==ing):[...removed,ing];onChange({qty,removed:r,note});};
+  return(
+    <div style={{background:T.white,borderRadius:T.r,padding:16,marginBottom:10,border:`1.5px solid ${active?T.accent+"40":T.border}`,boxShadow:active?`0 4px 20px rgba(255,87,51,.10)`:T.shadow,transition:"all .25s"}}>
+      <div style={{display:"flex",gap:13,alignItems:"flex-start"}}>
+        <div style={{fontSize:38,lineHeight:1,flexShrink:0,filter:active?`drop-shadow(0 4px 10px rgba(255,87,51,.4))`:"none",transition:"filter .3s"}}>{p.emoji}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:15,color:T.ink}}>{p.name}</div>
+          <div style={{color:T.inkLight,fontSize:12,marginTop:2,lineHeight:1.4}}>{p.desc}</div>
+          <div style={{color:T.accent,fontWeight:800,fontFamily:"'Instrument Serif',serif",fontSize:22,marginTop:5}}>${p.price}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {qty>0&&<button onClick={()=>setQty(-1)} style={{width:30,height:30,borderRadius:"50%",background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800}}>−</button>}
+          {qty>0&&<span style={{fontWeight:800,fontSize:20,color:T.accent,minWidth:22,textAlign:"center"}}>{qty}</span>}
+          <button onClick={()=>setQty(1)} style={{width:30,height:30,borderRadius:"50%",background:active?T.accent:T.bgWarm,border:`1px solid ${active?T.accent:T.border}`,color:active?"#fff":T.ink,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,transition:"all .2s"}}>+</button>
+        </div>
+      </div>
+      {active&&p.ing.length>0&&(
+        <div style={{marginTop:12}}>
+          <button onClick={()=>setOpen(!open)} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:5,padding:0}}>
+            <span style={{display:"inline-block",transform:open?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}>▶</span> Personalizar
+            {removed.length>0&&<span style={{background:T.accentXL,color:T.accent,borderRadius:20,fontSize:10,padding:"1px 8px",marginLeft:2}}>−{removed.length}</span>}
+          </button>
+          {open&&<div style={{marginTop:10,background:T.bgWarm,borderRadius:12,padding:12,animation:"fadeIn .2s ease",border:`1px solid ${T.border}`}}>
+            <p style={{color:T.inkLight,fontSize:10,marginBottom:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>Desactiva lo que no quieras</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {p.ing.map(ing=><label key={ing} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",padding:"7px 9px",borderRadius:9,background:removed.includes(ing)?"#FFE5E0":T.white,transition:"background .2s",border:`1px solid ${removed.includes(ing)?T.accent+"30":T.border}`}}><input type="checkbox" checked={!removed.includes(ing)} onChange={()=>toggleIng(ing)}/><span style={{fontSize:12,color:removed.includes(ing)?T.inkFaint:T.inkMid,textDecoration:removed.includes(ing)?"line-through":"none",transition:"all .2s",lineHeight:1.4}}>{ing}</span></label>)}
+            </div>
+            <input type="text" placeholder="📝 Nota breve (opcional)…" value={note} onChange={e=>onChange({qty,removed,note:e.target.value})} maxLength={60} style={{width:"100%",marginTop:10,padding:"9px 12px",borderRadius:9,background:T.white,border:`1px solid ${T.border}`,color:T.ink,fontSize:13,outline:"none",fontFamily:"'DM Sans',sans-serif"}}/>
+          </div>}
+        </div>
+      )}
+      {active&&p.ing.length===0&&<input type="text" placeholder="📝 Nota opcional…" value={note} onChange={e=>onChange({qty,removed,note:e.target.value})} maxLength={60} style={{width:"100%",marginTop:10,padding:"9px 12px",borderRadius:9,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:13,outline:"none",fontFamily:"'DM Sans',sans-serif"}}/>}
+    </div>
+  );
+}
+
+function TicketPanel({cart,prods,total,count,name,onSubmit}){
+  const entries=Object.entries(cart).flatMap(([id,d])=>{for(const arr of Object.values(prods)){const p=arr.find(x=>x.id===id);if(p)return[{...p,...d}];}return[];});
+  return(
+    <div style={{background:T.white,borderRadius:T.rLg,border:`1px solid ${T.border}`,overflow:"hidden",boxShadow:T.shadowLg}}>
+      <div style={{background:`linear-gradient(135deg,${T.accent},#E03010)`,padding:"16px 20px",textAlign:"center"}}>
+        <p style={{fontWeight:800,fontSize:13,letterSpacing:4,textTransform:"uppercase",color:"#fff"}}>Mi Orden</p>
+        <p style={{color:"rgba(255,255,255,.7)",fontSize:12,marginTop:3}}>{name}</p>
+      </div>
+      {count===0?<div style={{padding:36,textAlign:"center"}}><div style={{fontSize:36,marginBottom:12,opacity:.3}}>🛒</div><p style={{color:T.inkLight,fontSize:14,fontWeight:600}}>Tu orden está vacía</p><p style={{color:T.inkFaint,fontSize:12,marginTop:6}}>Agrega productos del menú</p></div>:(
+        <><div style={{padding:"16px 18px"}}>
+          {entries.map((item,i)=>(
+            <div key={item.id+"_"+i} style={{marginBottom:13,animation:"tickIn .3s ease",animationDelay:(i*.04)+"s",animationFillMode:"both"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <span style={{color:T.ink,fontSize:13,fontWeight:700,flex:1,lineHeight:1.4}}>{item.emoji} {item.qty}× {item.name}</span>
+                <span style={{color:T.accent,fontSize:13,fontWeight:800,marginLeft:10,flexShrink:0}}>${item.price*item.qty}</span>
+              </div>
+              {item.removed?.length>0&&<p style={{color:"#ef4444",fontSize:11,marginTop:3}}>✗ sin: {item.removed.join(", ")}</p>}
+              {item.note&&<p style={{color:T.inkLight,fontSize:11,marginTop:2,fontStyle:"italic"}}>» {item.note}</p>}
+            </div>
+          ))}
+          <div style={{borderTop:`2px dashed ${T.border}`,paddingTop:12,marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{color:T.inkLight,fontSize:11}}>{count} producto{count!==1?"s":""}</span>
+            <span style={{color:T.ink,fontWeight:800,fontSize:18}}>Total: <span style={{color:T.accent}}>${total}</span></span>
+          </div>
+        </div>
+        <div style={{padding:"0 16px 16px"}}><Btn onClick={onSubmit} style={{width:"100%",padding:"15px",fontSize:15,borderRadius:14,background:`linear-gradient(135deg,${T.accent},#E03010)`,boxShadow:`0 6px 22px rgba(255,87,51,.35)`}}>Hacer Pedido →</Btn></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function OrderTypeModal({onSelect,onClose}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(26,26,46,.45)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:24,animation:"fadeIn .2s ease"}}>
+      <div style={{background:T.white,borderRadius:T.rLg,padding:30,maxWidth:330,width:"100%",boxShadow:T.shadowLg,animation:"fadeUp .3s ease",border:`1px solid ${T.border}`}}>
+        <h2 style={{fontFamily:"'Instrument Serif',serif",fontSize:30,color:T.ink,textAlign:"center",marginBottom:6}}>¿Dónde vas a comer?</h2>
+        <p style={{color:T.inkLight,fontSize:13,textAlign:"center",marginBottom:24}}>Selecciona antes de confirmar</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+          {[{t:"aqui",i:"🪑",l:"Aquí mismo",s:"En el lugar"},{t:"llevar",i:"🛍️",l:"Para llevar",s:"Te lo empacamos"}].map(o=>(
+            <button key={o.t} onClick={()=>onSelect(o.t)} className="pr" style={{background:T.bgWarm,border:`1.5px solid ${T.border}`,borderRadius:16,padding:"20px 12px",cursor:"pointer",textAlign:"center",transition:"all .2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent;e.currentTarget.style.background=T.accentXL;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.background=T.bgWarm;}}>
+              <div style={{fontSize:32,marginBottom:8}}>{o.i}</div>
+              <div style={{color:T.ink,fontWeight:700,fontSize:14}}>{o.l}</div>
+              <div style={{color:T.inkLight,fontSize:11,marginTop:3}}>{o.s}</div>
+            </button>
+          ))}
+        </div>
+        <Btn onClick={onClose} bg={T.bgWarm} fg={T.inkMid} style={{width:"100%",padding:"12px",fontSize:14,border:`1px solid ${T.border}`}}>Cancelar</Btn>
+      </div>
+    </div>
+  );
+}
+
+function Confirm({name,order,biz,onNew}){
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:T.bg,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:-200,right:-200,width:500,height:500,borderRadius:"50%",background:"rgba(191,255,110,.18)",filter:"blur(60px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-100,left:-100,width:350,height:350,borderRadius:"50%",background:"rgba(255,87,51,.09)",filter:"blur(50px)",pointerEvents:"none"}}/>
+      <div style={{textAlign:"center",animation:"fadeUp .5s ease",maxWidth:330,position:"relative",zIndex:1}}>
+        <div style={{fontSize:58,marginBottom:14}}>🎉</div>
+        <p style={{color:T.inkMid,fontSize:15,marginBottom:4,fontWeight:600}}>¡Listo, {name}!</p>
+        <p style={{color:T.inkLight,fontSize:11,letterSpacing:3,textTransform:"uppercase",marginBottom:14,fontWeight:600}}>Tu número de orden es</p>
+        <div style={{background:`linear-gradient(135deg,${T.accent},#E03010)`,borderRadius:T.rLg,padding:"24px 32px",marginBottom:18,boxShadow:`0 16px 50px rgba(255,87,51,.35)`}}>
+          <div style={{fontFamily:"'Instrument Serif',serif",fontSize:100,lineHeight:.85,color:"#fff",letterSpacing:-2}}>{pad(order?.orderNum||0)}</div>
+        </div>
+        {order?.type&&<div style={{background:T.white,borderRadius:12,padding:"10px 22px",display:"inline-flex",alignItems:"center",gap:8,marginBottom:16,border:`1px solid ${T.border}`,boxShadow:T.shadow}}><span style={{fontSize:20}}>{order.type==="aqui"?"🪑":"🛍️"}</span><span style={{color:T.inkMid,fontSize:14,fontWeight:600}}>{order.type==="aqui"?"Para comer aquí":"Para llevar"}</span></div>}
+        <div style={{background:T.white,borderRadius:16,padding:18,marginBottom:20,border:`1px solid ${T.border}`,boxShadow:T.shadow}}>
+          <p style={{color:T.inkLight,fontSize:12,marginBottom:4}}>Total a pagar</p>
+          <p style={{color:T.accent,fontFamily:"'Instrument Serif',serif",fontSize:42,lineHeight:1}}>${order?.total}</p>
+          <p style={{color:T.inkLight,fontSize:12,marginTop:8}}>⏱ Tiempo aprox: <strong style={{color:T.inkMid}}>{biz.prep||15} min</strong></p>
+        </div>
+        <p style={{color:T.inkLight,fontSize:13,marginBottom:24,lineHeight:1.8}}>Escucha tu número cuando esté lista 🔔<br/>¡Gracias por tu preferencia!</p>
+        <Btn onClick={onNew} bg={T.white} fg={T.accent} style={{padding:"13px 32px",fontSize:15,border:`2px solid ${T.accent}`,boxShadow:T.shadow}}>Nueva Orden</Btn>
+      </div>
+    </div>
+  );
+}
+
+function Kitchen({biz,onAdmin}){
+  const [orders,setOrders]=useState([]),[,tick]=useState(0);
+  const prevLen=useRef(-1),alive=useRef(true);
+  const load=useCallback(()=>{
+    if(!alive.current)return;
+    const raw=LS.get(K.orders)||[];
+    const sorted=[...raw].sort((a,b)=>a.timestamp-b.timestamp);
+    if(prevLen.current>=0&&raw.length>prevLen.current)playAlert();
+    prevLen.current=raw.length;
+    if(alive.current)setOrders(sorted);
+  },[]);
+  useEffect(()=>{
+    alive.current=true;load();
+    const onMsg=()=>load();
+    try{BC?.addEventListener("message",onMsg);}catch{}
+    const iv=setInterval(load,2500),tv=setInterval(()=>{if(alive.current)tick(t=>t+1);},1000);
+    return()=>{alive.current=false;clearInterval(iv);clearInterval(tv);try{BC?.removeEventListener("message",onMsg);}catch{}};
+  },[load]);
+  const done=id=>{const updated=orders.filter(o=>o.id!==id);LS.set(K.orders,updated);prevLen.current=updated.length;try{BC?.postMessage({type:"order_done"});}catch{}setOrders(updated);};
+  return(
+    <div style={{minHeight:"100vh",background:T.bgWarm}}>
+      <div style={{background:T.white,borderBottom:`1px solid ${T.border}`,padding:"14px 20px",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 12px rgba(26,26,46,.06)"}}>
+        <div style={{maxWidth:1200,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div>
+            <h1 style={{fontFamily:"'Instrument Serif',serif",fontSize:26,color:T.ink,lineHeight:1}}>🍳 {biz.name} — Cocina</h1>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginTop:5}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:"#22c55e",display:"inline-block"}}/>
+              <span style={{color:T.inkLight,fontSize:11}}>EN VIVO · cada 2.5s</span>
+              <span style={{background:T.accent,color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:800,marginLeft:6}}>{orders.length} en cola</span>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={load} bg={T.bgWarm} fg={T.inkMid} style={{padding:"9px 16px",fontSize:13,border:`1px solid ${T.border}`}}>↻ Refrescar</Btn>
+            <Btn onClick={onAdmin} bg={T.bgWarm} fg={T.inkMid} style={{padding:"9px 16px",fontSize:13,border:`1px solid ${T.border}`}}>⚙️ Admin</Btn>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"18px 14px"}}>
+        {orders.length===0?(
+          <div style={{textAlign:"center",padding:"100px 20px",color:T.inkFaint}}>
+            <div style={{fontSize:56,marginBottom:18,opacity:.25}}>⏳</div>
+            <p style={{fontFamily:"'Instrument Serif',serif",fontSize:28,color:T.inkFaint}}>Esperando órdenes…</p>
+            <p style={{fontSize:13,marginTop:8}}>Las nuevas órdenes aparecen automáticamente</p>
+          </div>
+        ):<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(275px,1fr))",gap:14}}>{orders.map(o=><KCard key={o.id} order={o} onDone={done}/>)}</div>}
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══ KITCHEN CARD ═══ */
+function KCard({order,onDone}){
+  const [,tick]=useState(0);
+  useEffect(()=>{const iv=setInterval(()=>tick(t=>t+1),1000);return()=>clearInterval(iv);},[]);
+  const c=urgColor(order.timestamp);
+  return(
+    <div style={{background:T.white,borderRadius:T.rLg,border:`2px solid ${c}30`,overflow:"hidden",animation:"newCard .32s ease",boxShadow:`0 4px 24px rgba(26,26,46,.08)`}}>
+      <div style={{background:`linear-gradient(135deg,${c}12,transparent)`,padding:"14px 16px",borderBottom:`1px solid ${c}14`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontFamily:"'Instrument Serif',serif",fontSize:70,color:T.ink,lineHeight:.82}}>{pad(order.orderNum)}</div>
+            <div style={{color:T.inkMid,fontWeight:700,fontSize:14,marginTop:6}}>👤 {order.customerName}</div>
+            {order.type&&<div style={{color:T.inkLight,fontSize:12,marginTop:2}}>{order.type==="aqui"?"🪑 Comer aquí":"🛍️ Para llevar"}</div>}
+          </div>
+          <div style={{textAlign:"right"}}>
+            <span style={{color:c,fontWeight:800,fontSize:13,background:c+"18",borderRadius:20,padding:"3px 10px"}}>⏱ {elapsed(order.timestamp)}</span>
+            <div style={{color:T.accent,fontWeight:800,fontFamily:"'Instrument Serif',serif",fontSize:24,marginTop:8}}>${order.total}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:"12px 14px"}}>
+        {order.items.map((item,i)=>(
+          <div key={i} style={{marginBottom:9,paddingBottom:9,borderBottom:i<order.items.length-1?`1px solid ${T.border}`:"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:14,color:T.ink}}>
+              <span>{item.emoji} {item.qty}× {item.name}</span>
+              <span style={{color:T.inkLight,fontWeight:500,fontSize:12}}>${item.price*item.qty}</span>
+            </div>
+            {item.removed?.length>0&&<div style={{color:"#ef4444",fontSize:11,marginTop:4,background:"#FFF0F0",borderRadius:7,padding:"3px 9px",border:"1px solid #FFD5D5"}}>❌ SIN: {item.removed.join(" · ")}</div>}
+            {item.note&&<div style={{color:"#92710A",fontSize:11,marginTop:3,background:"#FFFAE5",borderRadius:7,padding:"3px 9px",border:"1px solid #FFE9A0"}}>📝 {item.note}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"0 14px 14px"}}>
+        <Btn onClick={()=>onDone(order.id)} bg={T.lime} fg={T.ink} style={{width:"100%",padding:"14px",fontSize:15,borderRadius:14,fontWeight:800,boxShadow:`0 4px 16px rgba(191,255,110,.5)`}}>✅ Lista — Entregar</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ADMIN LOGIN ═══════════════════════════ */
+function AdminLogin({onOk,onBack}){
+  const [pin,setPin]=useState(""),[shake,setShake]=useState(false),[err,setErr]=useState("");
+  const press=k=>{
+    if(k==="⌫"){setPin(p=>p.slice(0,-1));setErr("");return;}
+    if(pin.length>=4)return;
+    const np=pin+k;setPin(np);
+    if(np.length===4){
+      const stored=LS.get(K.pin)||DEFAULT_PIN;
+      if(np===stored){onOk();return;}
+      setShake(true);setErr("PIN incorrecto");setPin("");
+      setTimeout(()=>{setShake(false);setErr("");},1400);
+    }
+  };
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:T.bg}}>
+      <div style={{background:T.white,borderRadius:T.rLg,padding:32,maxWidth:290,width:"100%",boxShadow:T.shadowLg,border:`1px solid ${T.border}`,textAlign:"center",animation:"fadeUp .4s ease"}}>
+        <div style={{width:60,height:60,borderRadius:16,background:T.accentXL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 16px"}}>🔐</div>
+        <h2 style={{fontFamily:"'Instrument Serif',serif",fontSize:28,color:T.ink,marginBottom:4}}>Administración</h2>
+        <p style={{color:T.inkLight,fontSize:13,marginBottom:24}}>PIN de 4 dígitos</p>
+        <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:err?12:20,animation:shake?"shake .4s ease":"none"}}>
+          {[0,1,2,3].map(i=><div key={i} style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${pin.length>i?T.accent:T.inkFaint}`,background:pin.length>i?T.accent:"transparent",transition:"all .15s"}}/>)}
+        </div>
+        {err&&<p style={{color:"#ef4444",fontSize:13,marginBottom:14,fontWeight:600,animation:"slideD .2s ease"}}>{err}</p>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+          {["1","2","3","4","5","6","7","8","9","⌫","0","✓"].map(k=>(
+            <button key={k} onClick={()=>press(k)} className="pr" style={{padding:"17px 10px",borderRadius:12,background:k==="✓"?T.accent:T.bgWarm,border:`1px solid ${k==="✓"?T.accent:T.border}`,color:k==="✓"?"#fff":T.ink,fontSize:k==="⌫"?16:20,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>{k}</button>
+          ))}
+        </div>
+        <Btn onClick={onBack} bg={T.bgWarm} fg={T.inkMid} style={{width:"100%",padding:"12px",fontSize:14,border:`1px solid ${T.border}`}}>← Volver</Btn>
+        <p style={{color:T.inkFaint,fontSize:10,marginTop:12}}>PIN por defecto: {DEFAULT_PIN}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ADMIN PANEL ═══════════════════════════ */
+function Admin({biz,prods,onBiz,onProds,onOut}){
+  const [tab,setTab]=useState("stats");
+  const TABS=[{k:"stats",l:"Estadísticas",i:"📊"},{k:"prods",l:"Productos",i:"🛍️"},{k:"orders",l:"Órdenes",i:"🔢"},{k:"biz",l:"Negocio",i:"🏪"}];
+  return(
+    <div style={{minHeight:"100vh",background:T.bgWarm}}>
+      <div style={{background:T.white,borderBottom:`1px solid ${T.border}`,padding:"12px 20px",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 12px rgba(26,26,46,.05)"}}>
+        <div style={{maxWidth:900,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div>
+            <h1 style={{fontFamily:"'Instrument Serif',serif",fontSize:24,color:T.ink,lineHeight:1}}>⚙️ Administración</h1>
+            <p style={{color:T.inkLight,fontSize:11,marginTop:2}}>{biz.name}</p>
+          </div>
+          <Btn onClick={onOut} bg={T.bgWarm} fg={T.inkMid} style={{padding:"9px 16px",fontSize:13,border:`1px solid ${T.border}`}}>Salir ✕</Btn>
+        </div>
+        <div style={{maxWidth:900,margin:"10px auto 0",display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none"}}>
+          {TABS.map(t=>(
+            <button key={t.k} onClick={()=>setTab(t.k)} className="pr" style={{flexShrink:0,padding:"8px 16px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",transition:"all .2s",background:tab===t.k?T.accent:T.bgWarm,color:tab===t.k?"#fff":T.inkMid,borderRadius:50,fontFamily:"'DM Sans',sans-serif",boxShadow:tab===t.k?`0 4px 14px rgba(255,87,51,.3)`:"none"}}>
+              {t.i} {t.l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"22px 16px"}}>
+        {tab==="stats" &&<StatsTab/>}
+        {tab==="prods" &&<ProdsTab prods={prods} onSave={onProds}/>}
+        {tab==="orders"&&<OrdersTab biz={biz} onBiz={onBiz}/>}
+        {tab==="biz"   &&<BizTab biz={biz} onSave={onBiz}/>}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ STATS TAB ═══════════════════════════ */
+function StatsTab(){
+  const [ds,setDs]=useState(null),[ws,setWs]=useState(null);
+  useEffect(()=>{setDs(LS.get(dkey())||{rev:0,cnt:0,items:{}});setWs(LS.get(wkey())||{rev:0,cnt:0,days:{}});},[]);
+  if(!ds||!ws)return <p style={{color:T.inkLight,padding:40,textAlign:"center"}}>Cargando…</p>;
+  const avg=ds.cnt>0?Math.round(ds.rev/ds.cnt):0;
+  const top=Object.entries(ds.items).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const days=Object.entries(ws.days);
+  const maxD=Math.max(...days.map(([,v])=>v),1);
+  return(
+    <div style={{animation:"fadeIn .3s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink}}>Hoy — {new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"})}</h3>
+        <Btn onClick={exportCSV} bg={T.lime} fg={T.ink} style={{padding:"9px 18px",fontSize:13,fontWeight:800}}>📥 Exportar CSV</Btn>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:18}}>
+        {[{l:"Órdenes hoy",v:ds.cnt,c:"#3B82F6"},{l:"Recaudado",v:"$"+ds.rev,c:"#22c55e"},{l:"Ticket prom.",v:"$"+avg,c:T.accent}].map(s=>(
+          <Card key={s.l} style={{padding:"18px 20px",marginBottom:0}}>
+            <p style={{color:T.inkLight,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>{s.l}</p>
+            <p style={{color:s.c,fontFamily:"'Instrument Serif',serif",fontSize:36,lineHeight:1.1,marginTop:6}}>{s.v}</p>
+          </Card>
+        ))}
+      </div>
+      {top.length>0&&(
+        <Card>
+          <h4 style={{fontFamily:"'Instrument Serif',serif",fontSize:19,color:T.ink,marginBottom:12}}>🏆 Top productos hoy</h4>
+          {top.map(([nm,qty],i)=>(
+            <div key={nm} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<top.length-1?8:0,padding:"9px 13px",background:T.bgWarm,borderRadius:10}}>
+              <span style={{color:T.inkMid,fontSize:13,fontWeight:600}}>#{i+1} {nm}</span>
+              <span style={{background:T.accentXL,color:T.accent,borderRadius:20,padding:"3px 12px",fontSize:13,fontWeight:800}}>{qty} uds</span>
+            </div>
+          ))}
+        </Card>
+      )}
+      <Card style={{marginBottom:0}}>
+        <h4 style={{fontFamily:"'Instrument Serif',serif",fontSize:19,color:T.ink,marginBottom:4}}>📅 Esta semana</h4>
+        <p style={{color:T.inkLight,fontSize:12,marginBottom:18}}>Total: <strong style={{color:"#22c55e"}}>${ws.rev}</strong> · {ws.cnt} órdenes · prom/día: <strong style={{color:T.accent}}>${days.length>0?Math.round(ws.rev/days.length):0}</strong></p>
+        {days.length===0
+          ?<p style={{color:T.inkFaint,fontSize:13,textAlign:"center",padding:"22px 0"}}>Sin ventas esta semana aún</p>
+          :<div style={{display:"flex",gap:8,alignItems:"flex-end",height:110}}>
+            {days.map(([day,val])=>(
+              <div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                <span style={{color:"#22c55e",fontSize:10,fontWeight:800}}>${val}</span>
+                <div style={{width:"100%",background:`linear-gradient(to top,${T.accent},${T.yellow})`,borderRadius:"5px 5px 0 0",height:Math.max(Math.round((val/maxD)*78),4),transition:"height .6s ease",boxShadow:`0 4px 12px rgba(255,87,51,.25)`}}/>
+                <span style={{color:T.inkLight,fontSize:10,fontWeight:600}}>{day}</span>
+              </div>
+            ))}
+          </div>
+        }
+      </Card>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ PRODUCTS TAB ═══════════════════════════ */
+function ProdsTab({prods,onSave}){
+  const [cat,setCat]=useState("hamburguesas"),[editing,setEditing]=useState(null),[form,setForm]=useState({}),[msg,setMsg]=useState("");
+  const total=CATS.reduce((s,c)=>s+(prods[c.k]||[]).length,0),catP=prods[cat]||[];
+  const sm=t=>{setMsg(t);setTimeout(()=>setMsg(""),2600);};
+  const openNew=()=>{if(total>=MAX_PRODS){sm("⚠️ Límite de "+MAX_PRODS+" productos");return;}setForm({name:"",price:"",emoji:"🍔",desc:"",ing:"",on:true});setEditing("new");};
+  const openEdit=p=>{setForm({...p,ing:(p.ing||[]).join(", ")});setEditing(p.id);};
+  const del=id=>{onSave({...prods,[cat]:catP.filter(p=>p.id!==id)});sm("Producto eliminado");};
+  const toggle=id=>onSave({...prods,[cat]:catP.map(p=>p.id===id?{...p,on:!p.on}:p)});
+  const save=()=>{
+    if(!form.name?.trim()||!form.price){sm("⚠️ Nombre y precio requeridos");return;}
+    const item={id:editing==="new"?(cat[0]+Date.now()):editing,name:form.name.trim(),price:+form.price,emoji:form.emoji||"🍔",desc:form.desc||"",ing:form.ing?form.ing.split(",").map(s=>s.trim()).filter(Boolean):[],on:form.on!==false};
+    onSave(editing==="new"?{...prods,[cat]:[...catP,item]}:{...prods,[cat]:catP.map(p=>p.id===editing?item:p)});
+    setEditing(null);sm("✅ Guardado");
+  };
+  const IS={width:"100%",padding:"12px 14px",borderRadius:12,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:15,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const LB=({txt})=><label style={{color:T.inkLight,fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:7}}>{txt}</label>;
+  if(editing!==null)return(
+    <div style={{animation:"fadeIn .2s ease"}}>
+      <button onClick={()=>setEditing(null)} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontSize:14,fontWeight:700,marginBottom:18,display:"flex",alignItems:"center",gap:5}}>← Volver</button>
+      <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink,marginBottom:18}}>{editing==="new"?"Nuevo Producto":"Editar Producto"}</h3>
+      <Toast msg={msg}/>
+      <Card>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {[{f:"emoji",l:"Emoji"},{f:"name",l:"Nombre *"},{f:"desc",l:"Descripción"},{f:"ing",l:"Ingredientes (separados por coma)"}].map(field=>(
+            <div key={field.f}><LB txt={field.l}/><input type="text" value={form[field.f]||""} onChange={e=>setForm(p=>({...p,[field.f]:e.target.value}))} style={IS}/></div>
+          ))}
+          <div><LB txt="Precio * ($)"/><input type="number" value={form.price||""} min="1" onChange={e=>setForm(p=>({...p,price:e.target.value}))} style={IS}/></div>
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={form.on!==false} onChange={e=>setForm(p=>({...p,on:e.target.checked}))} style={{width:18,height:18}}/>
+            <span style={{color:T.inkMid,fontSize:14,fontWeight:600}}>Activo (visible en menú)</span>
+          </label>
+          <Btn onClick={save} style={{padding:"14px",fontSize:15,borderRadius:14}}>Guardar Producto</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+  return(
+    <div style={{animation:"fadeIn .2s ease"}}>
+      <Toast msg={msg}/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <div><h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink}}>Catálogo de Productos</h3><p style={{color:T.inkLight,fontSize:13,marginTop:2}}>{total}/{MAX_PRODS} registrados</p></div>
+        <Btn onClick={openNew} style={{padding:"9px 20px",fontSize:13,boxShadow:`0 4px 16px rgba(255,87,51,.3)`}}>+ Agregar</Btn>
+      </div>
+      <div style={{display:"flex",gap:7,marginBottom:14,overflowX:"auto",scrollbarWidth:"none"}}>
+        {CATS.map(c=><button key={c.k} onClick={()=>setCat(c.k)} className="pr" style={{flexShrink:0,padding:"7px 15px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",transition:"all .2s",background:cat===c.k?T.accent:T.white,color:cat===c.k?"#fff":T.inkMid,borderRadius:50,fontFamily:"'DM Sans',sans-serif",boxShadow:cat===c.k?`0 4px 12px rgba(255,87,51,.3)`:`0 2px 6px rgba(26,26,46,.06)`}}>{c.i} {c.l} ({(prods[c.k]||[]).length})</button>)}
+      </div>
+      {catP.length===0
+        ?<div style={{textAlign:"center",padding:50,color:T.inkFaint,border:`2px dashed ${T.border}`,borderRadius:T.r}}><p style={{fontSize:30,marginBottom:10,opacity:.3}}>🍽️</p><p style={{fontSize:14}}>Sin productos en esta categoría</p><Btn onClick={openNew} style={{marginTop:14,padding:"9px 20px",fontSize:13}}>+ Agregar</Btn></div>
+        :catP.map(p=>(
+          <div key={p.id} style={{background:T.white,borderRadius:T.r,padding:"12px 14px",marginBottom:8,border:`1px solid ${T.border}`,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:12,opacity:p.on?1:.45,transition:"opacity .25s"}}>
+            <div style={{fontSize:28,flexShrink:0}}>{p.emoji}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:14,color:T.ink}}>{p.name}</div>
+              <div style={{color:T.accent,fontFamily:"'Instrument Serif',serif",fontSize:18}}>${p.price}</div>
+            </div>
+            <div style={{display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
+              <button onClick={()=>toggle(p.id)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${p.on?"#22c55e":T.border}`,color:p.on?"#22c55e":T.inkLight,background:"none",fontSize:11,fontWeight:800,cursor:"pointer",transition:"all .2s"}}>{p.on?"ON":"OFF"}</button>
+              <button onClick={()=>openEdit(p)} style={{background:T.bgWarm,border:`1px solid ${T.border}`,color:T.inkMid,padding:"7px 10px",borderRadius:10,cursor:"pointer",fontSize:13}}>✏️</button>
+              <button onClick={()=>del(p.id)} style={{background:"#FFF0F0",border:"1px solid #FFD5D5",color:"#ef4444",padding:"7px 10px",borderRadius:10,cursor:"pointer",fontSize:13}}>🗑️</button>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ORDERS TAB ═══════════════════════════ */
+function OrdersTab({biz,onBiz}){
+  const [counter,setCounter]=useState(LS.get(K.counter)||0),[newNum,setNewNum]=useState(""),[prep,setPrep]=useState(biz.prep||15),[msg,setMsg]=useState("");
+  const sm=t=>{setMsg(t);setTimeout(()=>setMsg(""),2600);};
+  const doReset=()=>{LS.set(K.counter,0);setCounter(0);sm("✅ Reiniciado. Próxima orden: #001");};
+  const doSet=()=>{const n=parseInt(newNum);if(isNaN(n)||n<0||n>999){sm("⚠️ Número inválido (0–999)");return;}LS.set(K.counter,n);setCounter(n);setNewNum("");sm("✅ Contador → "+String(n).padStart(3,"0"));};
+  const savePrep=v=>{const n=parseInt(v||prep);if(isNaN(n)||n<1||n>120){sm("⚠️ Tiempo inválido (1–120)");return;}onBiz({...biz,prep:n});setPrep(n);sm("✅ Tiempo: "+n+" min");};
+  const IS={flex:1,padding:"11px 13px",borderRadius:12,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  return(
+    <div style={{animation:"fadeIn .3s ease"}}>
+      <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink,marginBottom:16}}>Gestión de Órdenes</h3>
+      <Toast msg={msg}/>
+      <Card>
+        <p style={{color:T.inkLight,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:10}}>Contador actual</p>
+        <div style={{fontFamily:"'Instrument Serif',serif",fontSize:96,color:T.accent,lineHeight:.85,marginBottom:14}}>{String(counter).padStart(3,"0")}</div>
+        <p style={{color:T.inkLight,fontSize:13,marginBottom:18,lineHeight:1.7}}>Del <strong style={{color:T.ink}}>#001</strong> al <strong style={{color:T.ink}}>#999</strong>, reinicio automático al llegar a 999.</p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <button onClick={doReset} style={{padding:"10px 18px",borderRadius:20,background:"#FFF0F0",border:"1.5px solid #FFD5D5",color:"#ef4444",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>↺ Reiniciar a #001</button>
+          <div style={{display:"flex",gap:8,flex:1,minWidth:180}}>
+            <input type="number" value={newNum} placeholder="Establecer en…" min="0" max="999" onChange={e=>setNewNum(e.target.value)} style={IS}/>
+            <Btn onClick={doSet} style={{padding:"11px 18px",fontSize:13,flexShrink:0}}>Aplicar</Btn>
+          </div>
+        </div>
+      </Card>
+      <Card style={{marginBottom:0}}>
+        <p style={{color:T.inkLight,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:10}}>Tiempo de preparación</p>
+        <div style={{fontFamily:"'Instrument Serif',serif",fontSize:60,color:"#3B82F6",lineHeight:.9,marginBottom:14}}>{prep} MIN</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,flex:1,minWidth:160}}>
+            <input type="number" value={prep} min="1" max="120" onChange={e=>setPrep(e.target.value)} style={IS}/>
+            <Btn onClick={()=>savePrep(prep)} bg="#3B82F6" style={{padding:"11px 18px",fontSize:13,flexShrink:0}}>Guardar</Btn>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            {[10,15,20,30].map(n=><button key={n} onClick={()=>savePrep(n)} style={{padding:"10px 13px",borderRadius:20,background:prep==n?"#3B82F6":T.bgWarm,border:`1px solid ${prep==n?"#3B82F6":T.border}`,color:prep==n?"#fff":T.inkMid,fontWeight:700,fontSize:12,cursor:"pointer",transition:"all .2s",fontFamily:"'DM Sans',sans-serif"}}>{n}</button>)}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ═══════════════════════════ BIZ TAB ═══════════════════════════ */
+function BizTab({biz,onSave}){
+  const [form,setForm]=useState({...biz}),[pin,setPin]=useState(""),[pin2,setPin2]=useState(""),[msg,setMsg]=useState(""),[pmsg,setPmsg]=useState("");
+  const sm=t=>{setMsg(t);setTimeout(()=>setMsg(""),2600);};
+  const spm=t=>{setPmsg(t);setTimeout(()=>setPmsg(""),3000);};
+  const saveInfo=()=>{onSave({...form});sm("✅ Cambios guardados");};
+  const savePIN=()=>{if(!/^\d{4}$/.test(pin)){spm("⚠️ El PIN debe ser 4 dígitos");return;}if(pin!==pin2){spm("⚠️ Los PINs no coinciden");return;}LS.set(K.pin,pin);setPin("");setPin2("");spm("✅ PIN actualizado");};
+  const handleLogo=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>setForm(p=>({...p,logo:ev.target.result}));r.readAsDataURL(file);};
+  const IS={width:"100%",padding:"12px 14px",borderRadius:12,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.ink,fontSize:15,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const LB=({txt})=><label style={{color:T.inkLight,fontSize:10,fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:7}}>{txt}</label>;
+  return(
+    <div style={{animation:"fadeIn .3s ease"}}>
+      <h3 style={{fontFamily:"'Instrument Serif',serif",fontSize:22,color:T.ink,marginBottom:16}}>Configuración del Negocio</h3>
+      <Toast msg={msg}/>
+      <Card>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div><LB txt="Nombre de la App"/><input type="text" value={form.appName||""} placeholder={APP_NAME} onChange={e=>setForm(p=>({...p,appName:e.target.value}))} style={IS}/></div>
+          <div><LB txt="Nombre del Negocio"/><input type="text" value={form.name||""} placeholder={BIZ_NAME} onChange={e=>setForm(p=>({...p,name:e.target.value}))} style={IS}/></div>
+          <div>
+            <LB txt="Logo del Negocio"/>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              {form.logo?<img src={form.logo} alt="logo" style={{width:66,height:66,borderRadius:14,objectFit:"cover",border:`2px solid ${T.border}`,boxShadow:T.shadow}}/>:<div style={{width:66,height:66,borderRadius:14,background:T.bgWarm,border:`2px dashed ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,opacity:.4}}>🍔</div>}
+              <div>
+                <label htmlFor="logo-file" style={{display:"inline-block",padding:"9px 18px",borderRadius:20,background:T.bgWarm,border:`1px solid ${T.border}`,color:T.inkMid,cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:T.shadow}}>📁 Subir imagen</label>
+                <input id="logo-file" type="file" accept="image/*" onChange={handleLogo} style={{display:"none"}}/>
+                {form.logo&&<button onClick={()=>setForm(p=>({...p,logo:null}))} style={{marginLeft:10,background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:13,fontWeight:700}}>Quitar</button>}
+              </div>
+            </div>
+          </div>
+          <Btn onClick={saveInfo} style={{padding:"14px",fontSize:15,borderRadius:14}}>Guardar Cambios</Btn>
+        </div>
+      </Card>
+      <Card style={{marginBottom:0}}>
+        <h4 style={{fontFamily:"'Instrument Serif',serif",fontSize:19,color:T.ink,marginBottom:14}}>🔐 Cambiar PIN</h4>
+        <Toast msg={pmsg}/>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <input type="password" value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="Nuevo PIN (4 dígitos)" style={{...IS,letterSpacing:10,fontSize:24}}/>
+          <input type="password" value={pin2} onChange={e=>setPin2(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="Confirmar PIN" style={{...IS,letterSpacing:10,fontSize:24}}/>
+          <Btn onClick={savePIN} bg={T.bgWarm} fg={T.inkMid} style={{padding:"13px",fontSize:14,border:`1px solid ${T.border}`}}>Cambiar PIN</Btn>
+        </div>
+        <p style={{color:T.inkFaint,fontSize:10,marginTop:12}}>PIN por defecto: {DEFAULT_PIN}</p>
+      </Card>
+    </div>
+  );
+}
+
+
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(App));
+</script></body></html>
